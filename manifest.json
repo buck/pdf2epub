@@ -1,0 +1,23 @@
+{
+  "manifest_version": 3,
+  "name": "PDF to ePub Converter",
+  "version": "1.1",
+  "description": "Convert PDFs on the web to ePub using Mistral OCR",
+  "permissions": [
+    "activeTab",
+    "contextMenus",
+    "downloads",
+    "storage"
+  ],
+  "host_permissions": [
+    "https://api.mistral.ai/*",
+    "*://*/*"
+  ],
+  "background": {
+    "service_worker": "background.js"
+  },
+  "action": {
+    "default_popup": "popup.html",
+    "default_title": "PDF to ePub"
+  }
+}
