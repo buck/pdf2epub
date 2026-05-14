@@ -1,11 +1,12 @@
 # PDF to ePub Converter
 
-A Chrome extension that converts PDF links on the web to ePub files using [Mistral OCR](https://mistral.ai/).
+A Chrome extension that converts PDFs to ePub files using [Mistral OCR](https://mistral.ai/).
 
 ## Features
 
 - Right-click any PDF link and choose **Convert PDF to ePub**
 - Or paste a PDF URL directly in the popup
+- Or pick a local PDF file — useful when the download link is hidden behind JavaScript
 - Preserves headings, tables, lists, code blocks, images, and inline formatting
 - Downloads a ready-to-read `.epub` file
 
@@ -19,16 +20,17 @@ A Chrome extension that converts PDF links on the web to ePub files using [Mistr
 
 **Via context menu:** Right-click a PDF link on any page and select *Convert PDF to ePub*. If no API key is saved yet, the URL is queued — open the popup, enter your key, and the conversion starts automatically.
 
-**Via popup:** Click the extension icon, paste a PDF URL and an optional title, then click *Convert PDF to ePub*.
+**Via popup (URL):** Click the extension icon, paste a PDF URL and an optional title, then click *Convert PDF to ePub*.
+
+**Via popup (local file):** If the PDF isn't directly linkable, download it first, then click **Browse…** in the popup to pick the file from disk. The title is filled in from the filename automatically.
 
 The extension badge shows progress (`OCR` → `✓` or `ERR`). The `.epub` is saved through Chrome's normal download dialog.
 
 ## How it works
 
-1. Sends the PDF to the Mistral OCR API (`mistral-ocr-latest`)
-2. If Mistral can't fetch the URL directly, the extension downloads the PDF and uploads it as a file
-3. Converts the returned markdown (including embedded base64 images) to XHTML
-4. Packages everything into a valid EPUB 2 archive using [JSZip](https://stuk.github.io/jszip/)
+1. Sends the PDF to the Mistral OCR API (`mistral-ocr-latest`) — either by URL, by downloading and uploading when Mistral can't fetch the URL directly, or by uploading a locally picked file
+2. Converts the returned markdown (including embedded base64 images) to XHTML
+3. Packages everything into a valid EPUB 2 archive using [JSZip](https://stuk.github.io/jszip/)
 
 ## Requirements
 
