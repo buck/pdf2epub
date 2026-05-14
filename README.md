@@ -22,7 +22,7 @@ A Chrome extension that converts PDFs to ePub files using [Mistral OCR](https://
 
 **Via popup (URL):** Click the extension icon, paste a PDF URL and an optional title, then click *Convert PDF to ePub*.
 
-**Via popup (local file):** If the PDF isn't directly linkable, download it first, then click **Browse…** in the popup to pick the file from disk. The title is filled in from the filename automatically.
+**Via popup (local file):** If the PDF isn't directly linkable, download it first, then click **Browse…** in the popup. This opens a small persistent picker window — necessary because Chrome dismisses extension popups the moment a file dialog steals focus (especially on Linux). Select the PDF in that window; conversion starts immediately and the window closes itself. The title is derived from the filename automatically.
 
 The extension badge shows progress (`OCR` → `✓` or `ERR`). The `.epub` is saved through Chrome's normal download dialog.
 
