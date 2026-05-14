@@ -4,9 +4,9 @@ A Chrome extension that converts PDFs to ePub files using [Mistral OCR](https://
 
 ## Features
 
-- Right-click any PDF link and choose **Convert PDF to ePub**
-- Or paste a PDF URL directly in the popup
-- Or pick a local PDF file — useful when the download link is hidden behind JavaScript
+- Right-click any PDF link → **Convert PDF to ePub**
+- Paste a URL directly in the popup
+- Pick a local PDF file — for PDFs buried behind JavaScript with no direct link
 - Preserves headings, tables, lists, code blocks, images, and inline formatting
 - Downloads a ready-to-read `.epub` file
 
@@ -14,23 +14,25 @@ A Chrome extension that converts PDFs to ePub files using [Mistral OCR](https://
 
 1. Clone or download this repo
 2. Go to `chrome://extensions`, enable **Developer mode**, click **Load unpacked**, and select the repo folder
-3. Get a [Mistral API key](https://console.mistral.ai/) and paste it into the extension popup
+3. Get a [Mistral API key](https://console.mistral.ai/), click the extension icon, and save it — the key is stored locally in Chrome and never leaves your machine
 
 ## Usage
 
-**Via context menu:** Right-click a PDF link on any page and select *Convert PDF to ePub*. If no API key is saved yet, the URL is queued — open the popup, enter your key, and the conversion starts automatically.
+**Context menu:** Right-click any PDF link on a page and choose *Convert PDF to ePub*. If no API key is saved yet the URL is queued; open the popup, enter your key, and conversion starts automatically.
 
-**Via popup (URL):** Click the extension icon, paste a PDF URL and an optional title, then click *Convert PDF to ePub*.
+**Popup — URL:** Click the extension icon, paste a PDF URL, set an optional title, and click *Convert PDF to ePub*.
 
-**Via popup (local file):** If the PDF isn't directly linkable, download it first, then click **Browse…** in the popup. This opens a small persistent picker window — necessary because Chrome dismisses extension popups the moment a file dialog steals focus (especially on Linux). Select the PDF in that window; conversion starts immediately and the window closes itself. The title is derived from the filename automatically.
+**Popup — local file:** If the PDF has no direct link (e.g. it loads through JavaScript), download it first, then click **Browse…** in the popup. A small picker window opens — select the PDF there and conversion begins immediately. The window closes itself when done. The title is taken from the filename.
 
-The extension badge shows progress (`OCR` → `✓` or `ERR`). The `.epub` is saved through Chrome's normal download dialog.
+> **Why a separate window?** Chrome dismisses extension popups the instant any OS file dialog steals focus, so the file `change` event would never fire. The picker window doesn't have this limitation.
+
+The extension icon badge shows live status: `↑` uploading · `OCR` processing · `✓` done · `ERR` failed. The `.epub` is saved via Chrome's normal download dialog.
 
 ## How it works
 
-1. Sends the PDF to the Mistral OCR API (`mistral-ocr-latest`) — either by URL, by downloading and uploading when Mistral can't fetch the URL directly, or by uploading a locally picked file
-2. Converts the returned markdown (including embedded base64 images) to XHTML
-3. Packages everything into a valid EPUB 2 archive using [JSZip](https://stuk.github.io/jszip/)
+1. **OCR** — the PDF is sent to Mistral's `mistral-ocr-latest` model. If Mistral can't fetch the URL directly the extension downloads and uploads the file itself. Local files are uploaded directly.
+2. **Conversion** — the returned markdown (headings, tables, lists, code, inline images) is converted to XHTML.
+3. **Packaging** — the XHTML, images, and stylesheet are bundled into a valid EPUB 2 archive using [JSZip](https://stuk.github.io/jszip/) and downloaded.
 
 ## Requirements
 
