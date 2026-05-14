@@ -60,28 +60,13 @@ async function refreshStatus() {
 }
 
 // ── File picker ───────────────────────────────────────────────────────────────
+// Opens a persistent window so the OS file dialog doesn't dismiss the popup.
 
-document.getElementById('pickFile').addEventListener('click', () => {
-  document.getElementById('pdfFile').click();
-});
-
-document.getElementById('pdfFile').addEventListener('change', () => {
-  const file = document.getElementById('pdfFile').files[0];
-  if (!file) return;
-  document.getElementById('fileName').textContent = file.name;
-  document.getElementById('pdfUrl').value = '';
+document.getElementById('pickFile').addEventListener('click', async () => {
   const title = document.getElementById('docTitle').value.trim();
-  if (!title) {
-    document.getElementById('docTitle').value =
-      file.name.replace(/\.pdf$/i, '').replace(/[-_+]/g, ' ').trim();
-  }
-});
-
-document.getElementById('pdfUrl').addEventListener('input', () => {
-  if (document.getElementById('pdfUrl').value.trim()) {
-    document.getElementById('pdfFile').value = '';
-    document.getElementById('fileName').textContent = 'No file chosen';
-  }
+  const url = chrome.runtime.getURL('picker.html') +
+    (title ? '?title=' + encodeURIComponent(title) : '');
+  await chrome.windows.create({ url, type: 'popup', width: 440, height: 160, focused: true });
 });
 
 // ── Save API key ──────────────────────────────────────────────────────────────
@@ -100,31 +85,11 @@ document.getElementById('convertBtn').addEventListener('click', async () => {
   const apiKey = document.getElementById('apiKey').value.trim();
   if (!apiKey) { setStatus('Please enter your Mistral API key.', 'error'); return; }
 
-  const pdfFile = document.getElementById('pdfFile').files[0];
-  const pdfUrl  = document.getElementById('pdfUrl').value.trim();
+  const pdfUrl = document.getElementById('pdfUrl').value.trim();
+  if (!pdfUrl) { setStatus('Please enter a PDF URL or use Browse… for a local file.', 'error'); return; }
 
-  if (!pdfFile && !pdfUrl) {
-    setStatus('Please enter a PDF URL or pick a local file.', 'error');
-    return;
-  }
-
-  const titleInput = document.getElementById('docTitle').value.trim();
-
-  if (pdfFile) {
-    const title = titleInput || pdfFile.name.replace(/\.pdf$/i, '').replace(/[-_+]/g, ' ').trim();
-    let buffer;
-    try {
-      buffer = await pdfFile.arrayBuffer();
-    } catch (e) {
-      setStatus('Could not read file: ' + e.message, 'error');
-      return;
-    }
-    chrome.runtime.sendMessage({ action: 'convertFile', buffer, filename: pdfFile.name, apiKey, title });
-  } else {
-    const title = titleInput || urlToTitle(pdfUrl);
-    chrome.runtime.sendMessage({ action: 'convert', url: pdfUrl, apiKey, title });
-  }
-
+  const title = document.getElementById('docTitle').value.trim() || urlToTitle(pdfUrl);
+  chrome.runtime.sendMessage({ action: 'convert', url: pdfUrl, apiKey, title });
   setStatus('Conversion running in background — you can close this popup.', '');
   showProgress(true);
   document.getElementById('convertBtn').disabled = true;

@@ -38,7 +38,7 @@ chrome.runtime.onMessage.addListener((msg, sender, sendResponse) => {
     convertAndDownload(msg.url, msg.apiKey, msg.title);
     sendResponse({ ok: true });
   } else if (msg.action === 'convertFile') {
-    convertFileAndDownload(msg.buffer, msg.filename, msg.apiKey, msg.title);
+    convertFileAndDownload(msg.base64, msg.filename, msg.apiKey, msg.title);
     sendResponse({ ok: true });
   }
   return false;
@@ -92,12 +92,15 @@ async function convertAndDownload(pdfUrl, apiKey, title) {
   }
 }
 
-async function convertFileAndDownload(buffer, filename, apiKey, title) {
+async function convertFileAndDownload(base64, filename, apiKey, title) {
   console.log('[pdf2epub] Starting file conversion:', filename);
   try {
     setBadge('↑', '#1565C0');
     await saveStatus('running', 'Uploading PDF to Mistral…');
-    const blob = new Blob([buffer], { type: 'application/pdf' });
+    const binary = atob(base64);
+    const bytes = new Uint8Array(binary.length);
+    for (let i = 0; i < binary.length; i++) bytes[i] = binary.charCodeAt(i);
+    const blob = new Blob([bytes], { type: 'application/pdf' });
     const data = await uploadAndOcr(blob, filename, apiKey);
     await buildAndSave(data, title, 'local file: ' + filename);
   } catch (err) {
