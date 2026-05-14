@@ -37,6 +37,9 @@ chrome.runtime.onMessage.addListener((msg, sender, sendResponse) => {
   if (msg.action === 'convert') {
     convertAndDownload(msg.url, msg.apiKey, msg.title);
     sendResponse({ ok: true });
+  } else if (msg.action === 'convertFile') {
+    convertFileAndDownload(msg.buffer, msg.filename, msg.apiKey, msg.title);
+    sendResponse({ ok: true });
   }
   return false;
 });
@@ -49,8 +52,6 @@ async function convertAndDownload(pdfUrl, apiKey, title) {
     setBadge('OCR', '#1565C0');
     await saveStatus('running', 'Sending to Mistral OCR…');
 
-    let data;
-
     // Try passing the URL directly first (fast path)
     const urlResp = await fetch(MISTRAL_API_URL, {
       method: 'POST',
@@ -62,32 +63,18 @@ async function convertAndDownload(pdfUrl, apiKey, title) {
       })
     });
 
+    let data;
     if (urlResp.status === 400) {
       // Mistral couldn't fetch the URL — download here and upload
       setBadge('↑', '#1565C0');
       await saveStatus('running', 'URL blocked by server — downloading PDF…');
       console.log('[pdf2epub] URL fetch blocked, uploading file directly');
-      const fileId = await uploadPdfToMistral(pdfUrl, apiKey);
-      try {
-        setBadge('OCR', '#1565C0');
-        await saveStatus('running', 'PDF uploaded. Running OCR…');
-        const fileResp = await fetch(MISTRAL_API_URL, {
-          method: 'POST',
-          headers: { 'Authorization': `Bearer ${apiKey}`, 'Content-Type': 'application/json' },
-          body: JSON.stringify({
-            model: MISTRAL_MODEL,
-            document: { type: 'file', file_id: fileId },
-            include_image_base64: true
-          })
-        });
-        if (!fileResp.ok) {
-          const err = await fileResp.text();
-          throw new Error(`Mistral OCR ${fileResp.status}: ${err}`);
-        }
-        data = await fileResp.json();
-      } finally {
-        deleteMistralFile(fileId, apiKey); // fire and forget
-      }
+      const pdfResp = await fetch(pdfUrl);
+      if (!pdfResp.ok) throw new Error(`Could not download PDF: ${pdfResp.status}`);
+      const blob = await pdfResp.blob();
+      const filename = (pdfUrl.split('/').pop().split('?')[0] || 'document.pdf')
+        .replace(/([^.pdf])$/, '$1.pdf');
+      data = await uploadAndOcr(blob, filename, apiKey);
     } else if (!urlResp.ok) {
       const errText = await urlResp.text();
       throw new Error(`Mistral API ${urlResp.status}: ${errText}`);
@@ -95,27 +82,7 @@ async function convertAndDownload(pdfUrl, apiKey, title) {
       data = await urlResp.json();
     }
 
-    const pages = data.pages || [];
-    console.log('[pdf2epub] OCR complete:', pages.length, 'pages');
-    await saveStatus('running', `OCR done (${pages.length} pages) — building ePub…`);
-
-    const imageMap = new Map();
-    for (const page of pages) {
-      for (const img of (page.images || [])) {
-        const raw = img.image_base64 || img.imageBase64 || '';
-        const b64 = raw.includes(';base64,') ? raw.split(';base64,').pop() : raw;
-        if (b64) imageMap.set(img.id, b64);
-      }
-    }
-
-    const fullMarkdown = pages.map(p => p.markdown || '').join('\n\n---\n\n');
-    const htmlContent = markdownToHtml(fullMarkdown, imageMap);
-    await generateEpub({ title, url: pdfUrl, content: htmlContent }, imageMap);
-
-    console.log('[pdf2epub] Done:', pages.length, 'pages,', imageMap.size, 'images');
-    setBadge('✓', '#2e7d32');
-    await saveStatus('done', `Done! ePub downloaded (${pages.length} pages, ${imageMap.size} images).`);
-    setTimeout(() => setBadge('', '#000'), 8000);
+    await buildAndSave(data, title, pdfUrl);
 
   } catch (err) {
     console.error('[pdf2epub] Error:', err);
@@ -125,14 +92,25 @@ async function convertAndDownload(pdfUrl, apiKey, title) {
   }
 }
 
-// ── Mistral file upload / delete ──────────────────────────────────────────────
+async function convertFileAndDownload(buffer, filename, apiKey, title) {
+  console.log('[pdf2epub] Starting file conversion:', filename);
+  try {
+    setBadge('↑', '#1565C0');
+    await saveStatus('running', 'Uploading PDF to Mistral…');
+    const blob = new Blob([buffer], { type: 'application/pdf' });
+    const data = await uploadAndOcr(blob, filename, apiKey);
+    await buildAndSave(data, title, 'local file: ' + filename);
+  } catch (err) {
+    console.error('[pdf2epub] Error:', err);
+    setBadge('ERR', '#c62828');
+    await saveStatus('error', err.message);
+    setTimeout(() => setBadge('', '#000'), 30000);
+  }
+}
 
-async function uploadPdfToMistral(pdfUrl, apiKey) {
-  const pdfResp = await fetch(pdfUrl);
-  if (!pdfResp.ok) throw new Error(`Could not download PDF: ${pdfResp.status}`);
-  const blob = await pdfResp.blob();
-  const filename = (pdfUrl.split('/').pop().split('?')[0] || 'document.pdf')
-    .replace(/([^.pdf])$/, '$1.pdf');
+// ── Mistral upload / OCR / epub assembly ──────────────────────────────────────
+
+async function uploadAndOcr(blob, filename, apiKey) {
   const formData = new FormData();
   formData.append('file', blob, filename);
   formData.append('purpose', 'ocr');
@@ -145,9 +123,53 @@ async function uploadPdfToMistral(pdfUrl, apiKey) {
     const err = await upResp.text();
     throw new Error(`File upload ${upResp.status}: ${err}`);
   }
-  const upData = await upResp.json();
-  console.log('[pdf2epub] Uploaded file ID:', upData.id);
-  return upData.id;
+  const { id: fileId } = await upResp.json();
+  console.log('[pdf2epub] Uploaded file ID:', fileId);
+
+  try {
+    setBadge('OCR', '#1565C0');
+    await saveStatus('running', 'PDF uploaded. Running OCR…');
+    const fileResp = await fetch(MISTRAL_API_URL, {
+      method: 'POST',
+      headers: { 'Authorization': `Bearer ${apiKey}`, 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        model: MISTRAL_MODEL,
+        document: { type: 'file', file_id: fileId },
+        include_image_base64: true
+      })
+    });
+    if (!fileResp.ok) {
+      const err = await fileResp.text();
+      throw new Error(`Mistral OCR ${fileResp.status}: ${err}`);
+    }
+    return await fileResp.json();
+  } finally {
+    deleteMistralFile(fileId, apiKey);
+  }
+}
+
+async function buildAndSave(data, title, sourceUrl) {
+  const pages = data.pages || [];
+  console.log('[pdf2epub] OCR complete:', pages.length, 'pages');
+  await saveStatus('running', `OCR done (${pages.length} pages) — building ePub…`);
+
+  const imageMap = new Map();
+  for (const page of pages) {
+    for (const img of (page.images || [])) {
+      const raw = img.image_base64 || img.imageBase64 || '';
+      const b64 = raw.includes(';base64,') ? raw.split(';base64,').pop() : raw;
+      if (b64) imageMap.set(img.id, b64);
+    }
+  }
+
+  const fullMarkdown = pages.map(p => p.markdown || '').join('\n\n---\n\n');
+  const htmlContent = markdownToHtml(fullMarkdown, imageMap);
+  await generateEpub({ title, url: sourceUrl, content: htmlContent }, imageMap);
+
+  console.log('[pdf2epub] Done:', pages.length, 'pages,', imageMap.size, 'images');
+  setBadge('✓', '#2e7d32');
+  await saveStatus('done', `Done! ePub downloaded (${pages.length} pages, ${imageMap.size} images).`);
+  setTimeout(() => setBadge('', '#000'), 8000);
 }
 
 async function deleteMistralFile(fileId, apiKey) {

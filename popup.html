@@ -105,6 +105,25 @@
       0%, 100% { opacity: 1; }
       50% { opacity: 0.5; }
     }
+    .or-divider {
+      text-align: center;
+      color: #bbb;
+      font-size: 11px;
+      margin: 4px 0;
+      display: flex;
+      align-items: center;
+      gap: 6px;
+    }
+    .or-divider::before, .or-divider::after {
+      content: '';
+      flex: 1;
+      height: 1px;
+      background: #e0e0e0;
+    }
+    .file-row { display: flex; align-items: center; gap: 8px; }
+    #pickFile { background: #e0e0e0; color: #333; white-space: nowrap; flex-shrink: 0; }
+    #pickFile:hover { background: #bdbdbd; }
+    .file-name { font-size: 11px; color: #777; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
   </style>
 </head>
 <body>
@@ -122,6 +141,17 @@
   <div class="section">
     <label>PDF URL</label>
     <input type="text" id="pdfUrl" placeholder="https://example.com/paper.pdf"/>
+  </div>
+
+  <div class="or-divider">or</div>
+
+  <div class="section">
+    <label>Local PDF File</label>
+    <div class="file-row">
+      <input type="file" id="pdfFile" accept=".pdf,application/pdf" style="display:none"/>
+      <button id="pickFile">Browse…</button>
+      <span id="fileName" class="file-name">No file chosen</span>
+    </div>
   </div>
 
   <div class="section">

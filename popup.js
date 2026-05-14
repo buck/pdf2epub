@@ -59,6 +59,31 @@ async function refreshStatus() {
   showProgress(isRunning);
 }
 
+// ── File picker ───────────────────────────────────────────────────────────────
+
+document.getElementById('pickFile').addEventListener('click', () => {
+  document.getElementById('pdfFile').click();
+});
+
+document.getElementById('pdfFile').addEventListener('change', () => {
+  const file = document.getElementById('pdfFile').files[0];
+  if (!file) return;
+  document.getElementById('fileName').textContent = file.name;
+  document.getElementById('pdfUrl').value = '';
+  const title = document.getElementById('docTitle').value.trim();
+  if (!title) {
+    document.getElementById('docTitle').value =
+      file.name.replace(/\.pdf$/i, '').replace(/[-_+]/g, ' ').trim();
+  }
+});
+
+document.getElementById('pdfUrl').addEventListener('input', () => {
+  if (document.getElementById('pdfUrl').value.trim()) {
+    document.getElementById('pdfFile').value = '';
+    document.getElementById('fileName').textContent = 'No file chosen';
+  }
+});
+
 // ── Save API key ──────────────────────────────────────────────────────────────
 
 document.getElementById('saveKey').addEventListener('click', async () => {
@@ -75,13 +100,31 @@ document.getElementById('convertBtn').addEventListener('click', async () => {
   const apiKey = document.getElementById('apiKey').value.trim();
   if (!apiKey) { setStatus('Please enter your Mistral API key.', 'error'); return; }
 
-  const pdfUrl = document.getElementById('pdfUrl').value.trim();
-  if (!pdfUrl) { setStatus('Please enter a PDF URL.', 'error'); return; }
+  const pdfFile = document.getElementById('pdfFile').files[0];
+  const pdfUrl  = document.getElementById('pdfUrl').value.trim();
 
-  const title = document.getElementById('docTitle').value.trim() || urlToTitle(pdfUrl);
+  if (!pdfFile && !pdfUrl) {
+    setStatus('Please enter a PDF URL or pick a local file.', 'error');
+    return;
+  }
 
-  // Hand off to background — safe to close popup now
-  chrome.runtime.sendMessage({ action: 'convert', url: pdfUrl, apiKey, title });
+  const titleInput = document.getElementById('docTitle').value.trim();
+
+  if (pdfFile) {
+    const title = titleInput || pdfFile.name.replace(/\.pdf$/i, '').replace(/[-_+]/g, ' ').trim();
+    let buffer;
+    try {
+      buffer = await pdfFile.arrayBuffer();
+    } catch (e) {
+      setStatus('Could not read file: ' + e.message, 'error');
+      return;
+    }
+    chrome.runtime.sendMessage({ action: 'convertFile', buffer, filename: pdfFile.name, apiKey, title });
+  } else {
+    const title = titleInput || urlToTitle(pdfUrl);
+    chrome.runtime.sendMessage({ action: 'convert', url: pdfUrl, apiKey, title });
+  }
+
   setStatus('Conversion running in background — you can close this popup.', '');
   showProgress(true);
   document.getElementById('convertBtn').disabled = true;
